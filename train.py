@@ -11,17 +11,25 @@ from models.SegNet import SegNet
 from utils.learning.metrics import dice_coef, precision, recall
 from utils.learning.losses import dice_coef_loss
 from utils.io.data import DataGen, save_results, save_history, load_data
+from tensorflow.python.client import device_lib
 
+def get_available_devices():
+    local_device_protos = device_lib.list_local_devices()
+    return [x.name for x in local_device_protos]
+
+print("Available devices:")
+print(get_available_devices())
 
 # manually set cuda 10.0 path
 #os.system('export LD_LIBRARY_PATH=/usr/local/cuda-10.0/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}')
 #os.system('export PATH=/usr/local/cuda-10.0/bin:/usr/local/cuda-10.0/NsightCompute-1.0${PATH:+:${PATH}}')
 
 # Varibales and data generator
-input_dim_x=224
-input_dim_y=224
+input_dim_x=512
+input_dim_y=512
 n_filters = 32
-dataset = 'Medetec_foot_ulcer_224'
+#dataset = 'Medetec_foot_ulcer_224'
+dataset = 'Foot Ulcer Segmentation Challenge'
 data_gen = DataGen('./data/' + dataset + '/', split_ratio=0.2, x=input_dim_x, y=input_dim_y)
 
 ######### Get the deep learning models #########
@@ -33,12 +41,14 @@ data_gen = DataGen('./data/' + dataset + '/', split_ratio=0.2, x=input_dim_x, y=
 ######### MobilenetV2 ##########
 model = Deeplabv3(input_shape=(input_dim_x, input_dim_y, 3), classes=1)
 model_name = 'MobilenetV2'
-with CustomObjectScope({'relu6': relu6,'DepthwiseConv2D': DepthwiseConv2D, 'BilinearUpsampling': BilinearUpsampling}):
-    model = load_model('training_history/2019-12-19 01%3A53%3A15.480800.hdf5'
-                       , custom_objects={'dice_coef': dice_coef, 'precision':precision, 'recall':recall})
+
+#为了加速训练，可以继续使用之前的模型进行训练
+# with CustomObjectScope({'relu6': relu6,'DepthwiseConv2D': DepthwiseConv2D, 'BilinearUpsampling': BilinearUpsampling}):
+#     model = load_model('training_history/2019-12-19 01%3A53%3A15.480800.hdf5'
+#                        , custom_objects={'dice_coef': dice_coef, 'precision':precision, 'recall':recall})
 
 ######### Vgg16 ##########
-# model, model_name = FCN_Vgg16_16s(input_shape=(input_dim_x, input_dim_y, 3))
+#model, model_name = FCN_Vgg16_16s(input_shape=(input_dim_x, input_dim_y, 3))
 
 ######### SegNet ##########
 # segnet = SegNet(n_filters, input_dim_x, input_dim_y, num_channels=3)
@@ -55,6 +65,7 @@ loss = 'binary_crossentropy'
 es = EarlyStopping(monitor='val_dice_coef', patience=200, mode='max', restore_best_weights=True)
 #training_history = model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs
 #                             , validation_split=0.2, verbose=1, callbacks=[])
+
 
 model.summary()
 model.compile(optimizer=Adam(lr=learning_rate), loss=loss, metrics=[dice_coef, precision, recall])

@@ -68,6 +68,7 @@ class DataGen:
                         image_batch.append(image.astype("float32"))
                     else:
                         print('the input image shape is not {}x{}'.format(self.x, self.y))
+                        
                     if label.shape[0] == self.x and label.shape[1] == self.y:
                         label_batch.append(label.astype("float32"))
                     else:
@@ -145,12 +146,28 @@ def load_jpg_images(path):
     return temp_list, file_list
 
 
-def load_png_images(path):
+def load_png_images(path, target_x, target_y):
 
     temp_list = []
     file_list = get_png_filename_list(path)
     for filename in file_list:
         img = cv2.imread(path + filename, 1)
+
+        # 如果图像的尺寸与目标尺寸不同，则调整大小
+        if img.shape[0] != target_x or img.shape[1] != target_y:
+            ratio = min(target_x / img.shape[0], target_y / img.shape[1])
+            new_x = int(img.shape[1] * ratio)
+            new_y = int(img.shape[0] * ratio)
+            img = cv2.resize(img, (new_x, new_y))
+            
+            # 如果需要，你还可以将图像放在中心，这样它的周围就会有一些填充
+            delta_w = target_x - new_x
+            delta_h = target_y - new_y
+            top, bottom = delta_h // 2, delta_h - (delta_h // 2)
+            left, right = delta_w // 2, delta_w - (delta_w // 2)
+            img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=[0, 0, 0])
+
+
         temp_list.append(img.astype("float32"))
 
     temp_list = np.array(temp_list)
@@ -158,7 +175,7 @@ def load_png_images(path):
     return temp_list, file_list
 
 
-def load_data(path):
+def load_data(path, target_x, target_y):
     # path_train_images = path + "train/images/padded/"
     # path_train_labels = path + "train/labels/padded/"
     # path_test_images = path + "test/images/padded/"
@@ -167,10 +184,10 @@ def load_data(path):
     path_train_labels = path + "train/labels/"
     path_test_images = path + "test/images/"
     path_test_labels = path + "test/labels/"
-    x_train, train_image_filenames_list = load_png_images(path_train_images)
-    y_train, train_label_filenames_list = load_png_images(path_train_labels)
-    x_test, test_image_filenames_list = load_png_images(path_test_images)
-    y_test, test_label_filenames_list = load_png_images(path_test_labels)
+    x_train, train_image_filenames_list = load_png_images(path_train_images, target_x, target_y)
+    y_train, train_label_filenames_list = load_png_images(path_train_labels, target_x, target_y)
+    x_test, test_image_filenames_list = load_png_images(path_test_images, target_x, target_y)
+    y_test, test_label_filenames_list = load_png_images(path_test_labels, target_x, target_y)
     x_train = normalize(x_train)
     y_train = normalize(y_train)
     x_test = normalize(x_test)
@@ -178,14 +195,16 @@ def load_data(path):
     return x_train, y_train, x_test, y_test, test_label_filenames_list
 
 
-def load_test_images(path):
+def load_test_images(path, target_x, target_y):
     path_test_images = path + "test/images/"
-    x_test, test_image_filenames_list = load_png_images(path_test_images)
+    x_test, test_image_filenames_list = load_png_images(path_test_images, target_x, target_y)
     x_test = normalize(x_test)
     return x_test, test_image_filenames_list
 
 
 def save_results(np_array, color_space, outpath, test_label_filenames_list):
+    if not os.path.exists(outpath):
+        os.makedirs(outpath)
     i = 0
     for filename in test_label_filenames_list:
         # predict_img = np.reshape(predict_img,(predict_img[0],predict_img[1]))
@@ -208,12 +227,16 @@ def save_rgb_results(np_array, outpath, test_label_filenames_list):
 
 def save_history(model, model_name, training_history, dataset, n_filters, epoch, learning_rate, loss,
                  color_space, path=None, temp_name=None):
-    save_weight_filename = temp_name if temp_name else str(datetime.datetime.now())
-    model.save('{}{}.hdf5'.format(path, save_weight_filename))
-    with open('{}{}.json'.format(path, save_weight_filename), 'w') as f:
+    formatted_date = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    save_weight_filename = temp_name if temp_name else formatted_date
+
+    fileFullName = os.path.join(path, '{}.hdf5'.format(save_weight_filename))
+
+    model.save(fileFullName)
+    with open(os.path.join(path, '{}.json'.format(save_weight_filename)), 'w') as f:
         json.dump(training_history.history, f, indent=2)
 
-    json_list = ['{}{}.json'.format(path, save_weight_filename)]
+    json_list = [os.path.join(path, '{}.json'.format(save_weight_filename))]
     for json_filename in json_list:
         with open(json_filename) as f:
             # convert the loss json object to a python dict
